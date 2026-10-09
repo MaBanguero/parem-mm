@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PARE.MM — Matriz de seguimiento</title>
+<style>
+  :root {
+    --fg: #1f2430; --muted: #6b7280; --accent: #0f766e;
+    --border: #e5e7eb; --card: #ffffff; --bg: #f5f6f8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.5;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .drop {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 32px; text-align: center;
+    color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop.drag { border-color: var(--accent); background: #f0fdfa; }
+  .drop b { color: var(--fg); }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    padding: 10px 18px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.secondary { background: #eef2f7; color: var(--fg); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 600; background: #fafafa; }
+  tfoot td { font-weight: 700; border-top: 2px solid var(--border); }
+  .note { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .error { color: #b91c1c; font-weight: 600; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { background: #eef2f7; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PARE.MM — Matriz de seguimiento</h1>
+  <p class="sub">Sube el reporte201 (“comportamiento de citas”) y genera la matriz con las métricas por municipio.</p>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <b>Elegí el archivo</b> o arrastralo acá<br>
+      <span style="font-size:13px">.csv (tab/comma) o .xlsx — columnas <code>cupscodigo</code>, <code>programapyp</code>, <code>identificacion</code>, <code>municipio</code></span>
+    </div>
+    <input type="file" id="file" accept=".csv,.tsv,.txt,.xlsx,.xlsm" style="display:none">
+    <div id="fname" class="hint"></div>
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end">
+      <label style="font-size:13px; color:var(--muted)">Desde
+        <input type="date" id="fini" style="display:block; margin-top:4px; padding:6px 8px; border:1px solid var(--border); border-radius:8px">
+      </label>
+      <label style="font-size:13px; color:var(--muted)">Hasta
+        <input type="date" id="ffin" style="display:block; margin-top:4px; padding:6px 8px; border:1px solid var(--border); border-radius:8px">
+      </label>
+      <label style="font-size:13px; color:var(--muted)">Filtrar por
+        <select id="fcol" style="display:block; margin-top:4px; padding:6px 8px; border:1px solid var(--border); border-radius:8px">
+          <option value="fechaprocedimiento">Fecha de atención</option>
+          <option value="fechafactura">Fecha de facturación</option>
+        </select>
+      </label>
+      <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px; padding-bottom:7px">
+        <input type="checkbox" id="ebs" style="width:15px; height:15px">
+        Solo equipos básicos (EBS)
+      </label>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:10px; align-items:center">
+      <button id="btn" disabled>Procesar y calcular</button>
+      <button id="dl" class="secondary" disabled>Descargar matriz Excel (.xlsx)</button>
+    </div>
+    <div id="msg" class="hint" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th>Municipio</th>
+          <th>I · Pruebas embarazo</th>
+          <th>J · Gestantes captadas</th>
+          <th>K · Control prenatal</th>
+          <th>L · Puerperio</th>
+          <th>M · Recién nacido</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot></tfoot>
+    </table>
+    <div id="chips" class="chips"></div>
+    <p class="note">
+      <b>J (gestantes captadas)</b> se calcula como <b>mujeres distintas</b> con <code>programapyp</code> de prenatal.
+      Revisá el detalle de señales (mujer embarazada / 1ª vez prenatal) debajo de la tabla si querés otro criterio.
+    </p>
+  </div>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const btn = document.getElementById('btn');
+const dl = document.getElementById('dl');
+const fname = document.getElementById('fname');
+const msg = document.getElementById('msg');
+const resultCard = document.getElementById('resultCard');
+let resultId = null;
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('drag');
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) setFile(fileInput.files[0]); });
+
+function setFile(f) {
+  fname.textContent = 'Archivo: ' + f.name + ' (' + (f.size/1024).toFixed(0) + ' KB)';
+  btn.disabled = false;
+  msg.textContent = '';
+}
+
+btn.addEventListener('click', async () => {
+  const f = fileInput.files[0];
+  if (!f) return;
+  btn.disabled = true; msg.textContent = 'Procesando…';
+  const fd = new FormData(); fd.append('file', f);
+  fd.append('fecha_inicio', document.getElementById('fini').value);
+  fd.append('fecha_fin', document.getElementById('ffin').value);
+  fd.append('fecha_col', document.getElementById('fcol').value);
+  fd.append('solo_equipos_basicos', document.getElementById('ebs').checked ? '1' : '0');
+  try {
+    const res = await fetch('/api/procesar', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) { msg.innerHTML = '<span class="error">Error: ' + escapeHtml(data.detail || 'desconocido') + '</span>'; return; }
+    resultId = data.id;
+    render(data);
+    dl.disabled = false;
+    msg.textContent = 'Listo. ' + data.filas_ok + ' filas dentro de los 3 municipios (total ' + data.total_filas + ').';
+  } catch (e) {
+    msg.innerHTML = '<span class="error">Falló la conexión: ' + escapeHtml(String(e)) + '</span>';
+  } finally { btn.disabled = false; }
+});
+
+function render(data) {
+  resultCard.style.display = 'block';
+  const tbody = document.querySelector('#tbl tbody');
+  const tfoot = document.querySelector('#tbl tfoot');
+  const chips = document.getElementById('chips');
+  const order = ['PUERTO TEJADA', 'PADILLA', 'VILLA RICA'];
+  tbody.innerHTML = '';
+  tfoot.innerHTML = '';
+  chips.innerHTML = '';
+  for (const m of order) {
+    const d = data.municipios[m];
+    if (!d) continue;
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + escapeHtml(m) + '</td>' +
+      '<td>' + d.I + '</td><td>' + d.J + '</td><td>' + d.K + '</td><td>' + d.L + '</td><td>' + d.M + '</td>';
+    tbody.appendChild(tr);
+  }
+  const t = data.totales;
+  tfoot.innerHTML = '<tr><td>Total</td><td>' + t.I + '</td><td>' + t.J + '</td><td>' + t.K + '</td><td>' + t.L + '</td><td>' + t.M + '</td></tr>';
+
+  const sen = order.map(m => {
+    const s = data.municipios[m] && data.municipios[m]._senales;
+    return s ? m + ': prenatal ' + s.gestantes_prenatal_distinct + ' · embarazada ' + s.gestantes_mujer_embarazada + ' · 1ªvez ' + s.gestantes_primera_vez_prenatal : '';
+  }).filter(Boolean);
+  if (sen.length) {
+    const c = document.createElement('span'); c.className = 'chip';
+    c.textContent = 'Señales J: ' + sen.join('   |   ');
+    chips.appendChild(c);
+  }
+  const fuera = data.fuera_de_municipio;
+  const fkeys = Object.keys(fuera || {});
+  if (fkeys.length) {
+    const c = document.createElement('span'); c.className = 'chip';
+    c.textContent = 'Fuera de los 3 municipios: ' + fkeys.map(k => k + ' (' + fuera[k] + ')').join(', ');
+    chips.appendChild(c);
+  }
+}
+
+dl.addEventListener('click', () => {
+  if (!resultId) return;
+  window.location.href = '/api/descargar/' + resultId;
+});
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+</body>
+</html>
